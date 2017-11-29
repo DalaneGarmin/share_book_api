@@ -2,9 +2,11 @@ let express = require("express");
 let app = express();
 let bodyParser = require("body-parser");
 let db = require('sqlite');
+let cors = require('./cors')
+
 require("dotenv").config();
 console.log('env:', process.env.NODE_ENV);
-
+app.use(cors);
 app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({
   extended: false
@@ -13,13 +15,47 @@ app.use(bodyParser.urlencoded({
 
 function clean_books(books) {
   return books.map(item => {
+    console.log(item);
     return {
       title: item.title,
       isbn: item.isbn,
-      publisher: item.publisher
+      publisher: item.publisher,
+      author: item.author
     }
   })
 }
+
+app.delete('/api/book/', (req, res) => {
+  let {
+    empid,
+    isbn
+  } = req.body;
+  console.log('del api', req.body)
+  let sql_string = 'delete from book_own where owner = ? and isbn = ?';
+
+  db.open(process.env.DB)
+    .then(() => db.run(sql_string, empid, isbn))
+    .catch(err => {
+      console.log(err);
+    });
+  res.end();
+});
+
+app.post('/api/book/', (req, res) => {
+  let {
+    empid,
+    isbn
+  } = req.body;
+  console.log('add api')
+  let sql_string = 'insert into book_own values(?, ?, 0)';
+  db.open(process.env.DB)
+    .then(() => db.run(sql_string, empid, isbn))
+    .catch(err => {
+      console.log(err);
+
+    });
+  res.end();
+});
 
 
 app.get('/api/mybookout/:query', (req, res) => {
