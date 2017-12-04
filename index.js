@@ -13,6 +13,8 @@ app.use(bodyParser.urlencoded({
 }));
 
 
+
+
 function clean_books(books) {
   return books.map(item => {
     console.log(item);
@@ -52,7 +54,6 @@ app.post('/api/book/', (req, res) => {
     .then(() => db.run(sql_string, empid, isbn))
     .catch(err => {
       console.log(err);
-
     });
   res.end();
 });
@@ -97,7 +98,7 @@ app.get('/api/mybook/:query', (req, res) => {
 
 function openDbThenQuery(req, res, sql) {
   db.open(process.env.DB)
-    .then(() => db.get(sql, req.params.query))
+    .then(() => db.all(sql, req.params.query))
     .then(data => res.json(data))
     .catch(err => {
       console.log(err);
@@ -111,7 +112,7 @@ app.get('/api/isbn/:query', (req, res) => {
 });
 
 app.get('/api/bookname/:query', (req, res) => {
-  let sql_string = 'Select * from books where title=?';
+  let sql_string = 'Select * from books where instr(title, ?) > 0 COLLATE NOCASE';
   openDbThenQuery(req, res, sql_string);
 });
 
@@ -120,7 +121,19 @@ app.get('/api/publisher/:query', (req, res) => {
   openDbThenQuery(req, res, sql_string);
 });
 
-
+app.post('/api/crawl/', (req, res) => {
+  let {
+    productID
+  } = req.body;
+  console.log('crawl api', productID)
+  let sql_string = 'insert into request_crawler values(?, ?, ?)';
+  db.open(process.env.DB)
+    .then(() => db.run(sql_string, productID, 'pending', Date.now()))
+    .catch(err => {
+      console.log(err)
+    })
+  res.end()
+})
 
 
 app.get('/', (req, res) => {
