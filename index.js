@@ -27,28 +27,14 @@ function clean_books(books) {
   })
 }
 
-app.delete('/api/book/', (req, res) => {
-  let {
-    empid,
-    isbn
-  } = req.body;
-  console.log('del api', req.body)
-  let sql_string = 'delete from book_own where owner = ? and isbn = ?';
 
-  db.open(process.env.DB)
-    .then(() => db.run(sql_string, empid, isbn))
-    .catch(err => {
-      console.log(err);
-    });
-  res.end();
-});
 
 app.post('/api/book/', (req, res) => {
   let {
     empid,
     isbn
   } = req.body;
-  console.log('add api')
+  console.log('add api', req.body)
   let sql_string = 'insert into book_own values(?, ?, 0)';
   db.open(process.env.DB)
     .then(() => db.run(sql_string, empid, isbn))
@@ -59,8 +45,35 @@ app.post('/api/book/', (req, res) => {
 });
 
 
+
+
+app.delete('/api/book/', (req, res) => {
+  let {
+    empid,
+    isbn
+  } = req.body;
+  console.log('del api', req.body)
+  let sql_string = 'delete from book_own where owner = ? and isbn = ?';;
+  db.open(process.env.DB)
+    .then(() => db.run(sql_string, empid, isbn))
+    .catch(err => {
+      console.log(err);
+    });
+  res.end();
+});
+
+
+app.get('/api/bookOwner/:query', (req, res) => {
+  // isbn => [book_owners]
+  let sql_string = 'Select owner, send_to from book_own where isbn=?';
+  openDbThenQueryAll(req, res, sql_string)
+
+})
+
+
 app.get('/api/mybookout/:query', (req, res) => {
-  let sql_string = 'Select * from book_record join books where owner=? and book_record.isbn = books.isbn';
+  let sql_string = 'Select * from book_record join books  where owner=? and  book_record.isbn = books.isbn';
+
   db.open(process.env.DB)
     .then(() => db.all(sql_string, 15588))
     .then((books) => res.json(clean_books(books)))
@@ -96,9 +109,19 @@ app.get('/api/mybook/:query', (req, res) => {
 });
 
 
-function openDbThenQuery(req, res, sql) {
+function openDbThenQueryAll(req, res, sql) {
   db.open(process.env.DB)
     .then(() => db.all(sql, req.params.query))
+    .then(data => res.json(data))
+    .catch(err => {
+      console.log(err);
+      res.end();
+    });
+}
+
+function openDbThenQuery(req, res, sql) {
+  db.open(process.env.DB)
+    .then(() => db.get(sql, req.params.query))
     .then(data => res.json(data))
     .catch(err => {
       console.log(err);
@@ -112,13 +135,14 @@ app.get('/api/isbn/:query', (req, res) => {
 });
 
 app.get('/api/bookname/:query', (req, res) => {
-  let sql_string = 'Select * from books where instr(title, ?) > 0 COLLATE NOCASE';
-  openDbThenQuery(req, res, sql_string);
+  let sql_string = "Select distinct books.* from books join book_own where instr(books.title, ?) > 0 and books.isbn = book_own.isbn"
+  openDbThenQueryAll(req, res, sql_string);
 });
 
 app.get('/api/publisher/:query', (req, res) => {
+
   let sql_string = 'Select * from books where publisher=?';
-  openDbThenQuery(req, res, sql_string);
+  openDbThenQueryAll(req, res, sql_string);
 });
 
 app.post('/api/crawl/', (req, res) => {
