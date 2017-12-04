@@ -140,10 +140,45 @@ app.get('/api/bookname/:query', (req, res) => {
 });
 
 app.get('/api/publisher/:query', (req, res) => {
-
   let sql_string = 'Select * from books where publisher=?';
   openDbThenQueryAll(req, res, sql_string);
 });
+
+
+// app.get('/api/bookrecord/:owner', (req, res)=>{
+//   let sql_string = 'select * from book_record where owner=?'
+//   let{owner, send_to, isbn} = req.params;
+//   db.open(process.env.DB)
+//   .then( ()=>db.all(sql_string, owner, send_to, isbn))
+//   .then( (res)=>{ console.log(res)})
+//   res.end();
+// });
+
+app.get('/api/bookrecord/:owner', (req, res)=>{
+  let sql_string = 'select * from book_record where owner=? or send_to = ?'
+  let{owner, send_to, isbn} = req.params;
+  db.open(process.env.DB)
+  .then( ()=>db.all(sql_string, owner, owner))
+  .then( (res)=>{ console.log(res)})
+  res.end();
+});
+
+
+// api thinking.
+// owner, guest, isbn, status, owner see, guest see
+// ownerid, guestid, 5566, guest -----> owner(book), requested, requsting
+// ownerid, guestid, 5566, guest <-book owner, bookCheckOut, bookCheckIn
+// ownerid, guestid, 5566, guest book-> owner, bookCheckIn, bookCheckOut
+// ownerid, guestid, 5566, completed, completed, completed
+
+// app.get('/api/bookrecord/:owner/:send_to/:isbn', (req, res)=>{
+//   let sql_string = 'select * from book_record where owner=? and send_to = ? and isbn = ?'
+//   let{owner, send_to, isbn} = req.params;
+//   db.open(process.env.DB)
+//   .then( ()=>db.get(sql_string, owner, send_to, isbn))
+//   .then( (res)=>{ console.log(res)})
+//   res.end();
+// });
 
 app.post('/api/crawl/', (req, res) => {
   let {
