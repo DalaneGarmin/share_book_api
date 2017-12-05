@@ -2,7 +2,56 @@ let express = require("express");
 let app = express();
 let bodyParser = require("body-parser");
 let db = require('sqlite');
-let cors = require('./cors')
+let cors = require('./cors');
+let passport = require('passport'),
+  LocalStrategy = require('passport-local').Strategy,
+  session = require('express-session'),
+  RedisStore = require('connect-redis')(session);
+
+
+app.use(session({
+  store: new RedisStore(),
+  secret: 'keyboard cat',
+  resave: false,
+  saveUninitialized: false
+}))
+
+app.use(passport.initialize());
+app.use(passport.session());
+
+passport.use(new LocalStrategy({
+    usernameField: "username",
+    passwordField: "password"
+  },
+  function(username, password, done) {
+    console.log(username, password)
+
+    var options = {
+      method: 'POST',
+      url: 'http://ws.garmin.com.tw/passport/aurzt.asmx/chkPassportUser',
+      form: {
+        Empid: username,
+        sPassword: password
+      }
+    };
+    request(options, function(error, response, body) {
+      console.log('request login server')
+      if (error) done(error);
+      let logined = body.includes('<string xmlns="http://tempuri.org/">1</string>');
+      if (logined) {
+        console.log('yeah login');
+        done(username);
+      } else {
+        console.log('no who are you');
+        done(null, false, {
+          message: 'fail'
+        });
+      }
+    });
+  }
+));
+
+
 
 require("dotenv").config();
 console.log('env:', process.env.NODE_ENV);
@@ -163,12 +212,16 @@ app.get('/api/bookrecord/:owner', (req, res) => {
 });
 
 
-// api thinking.
-// owner, guest, isbn, status, guest see, owner see
-// ownerid, guestid, 5566, guest -> owner(book), bookRequsting, bookRequested |
-// Event : Guest Requesting a book. / Event : Cancel : kill record.
-// api : bookRecord : insert a record (owner, guest, 5566, 'guest -> owner(book)')
-// app.post
+app.post('/login', passport.authenticate('local'),
+  (req, res) => {
+    console.log('yay')
+    res.end();
+  });
+
+
+
+
+
 app.post('/api/bookTrade', (req, res) => {
     let {
       owner,
