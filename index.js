@@ -17,7 +17,7 @@ app.use(bodyParser.urlencoded({
 
 function clean_books(books) {
   return books.map(item => {
-    console.log(item);
+    // console.log(item);
     return {
       title: item.title,
       isbn: item.isbn,
@@ -145,40 +145,89 @@ app.get('/api/publisher/:query', (req, res) => {
 });
 
 
-// app.get('/api/bookrecord/:owner', (req, res)=>{
-//   let sql_string = 'select * from book_record where owner=?'
-//   let{owner, send_to, isbn} = req.params;
-//   db.open(process.env.DB)
-//   .then( ()=>db.all(sql_string, owner, send_to, isbn))
-//   .then( (res)=>{ console.log(res)})
-//   res.end();
-// });
 
-app.get('/api/bookrecord/:owner', (req, res)=>{
-  let sql_string = 'select * from book_record where owner=? or send_to = ?'
-  let{owner, send_to, isbn} = req.params;
+app.get('/api/bookrecord/:owner', (req, res) => {
+  let sql_string = 'select book_record.*, books.title from book_record join books where (book_record.owner=? or book_record.send_to = ?) and book_record.isbn = books.isbn'
+  let {
+    owner,
+    send_to,
+    isbn
+  } = req.params;
   db.open(process.env.DB)
-  .then( ()=>db.all(sql_string, owner, owner))
-  .then( (res)=>{ console.log(res)})
-  res.end();
+    .then(() => db.all(sql_string, owner, owner))
+    .then((result) => {
+      console.log(result)
+      res.json(result)
+    })
+    .catch(() => res.end())
 });
 
 
 // api thinking.
-// owner, guest, isbn, status, owner see, guest see
-// ownerid, guestid, 5566, guest -----> owner(book), requested, requsting
-// ownerid, guestid, 5566, guest <-book owner, bookCheckOut, bookCheckIn
-// ownerid, guestid, 5566, guest book-> owner, bookCheckIn, bookCheckOut
-// ownerid, guestid, 5566, completed, completed, completed
+// owner, guest, isbn, status, guest see, owner see
+// ownerid, guestid, 5566, guest -> owner(book), bookRequsting, bookRequested |
+// Event : Guest Requesting a book. / Event : Cancel : kill record.
+// api : bookRecord : insert a record (owner, guest, 5566, 'guest -> owner(book)')
+// app.post
+app.post('/api/bookTrade', (req, res) => {
+    let {
+      owner,
+      isbn,
+      send_to
+    } = req.body;
+    let init_state = 'guest -> owner(book)';
+    let sql_string = 'insert into book_record values(?, ?, ?, ?)';
+    db.open(process.env.DB)
+      .then(() => db.run(sql_string, owner, isbn, send_to, init_state))
+      .catch((err) => console.log('insert book_record err', err));
 
-// app.get('/api/bookrecord/:owner/:send_to/:isbn', (req, res)=>{
-//   let sql_string = 'select * from book_record where owner=? and send_to = ? and isbn = ?'
-//   let{owner, send_to, isbn} = req.params;
-//   db.open(process.env.DB)
-//   .then( ()=>db.get(sql_string, owner, send_to, isbn))
-//   .then( (res)=>{ console.log(res)})
-//   res.end();
-// });
+    res.end();
+
+  })
+  .delete('/api/bookTrade', (req, res) => {
+    let {
+      owner,
+      isbn,
+      send_to
+    } = req.body;
+    let init_state = 'guest -> owner(book)';
+    let sql_string = 'delete from  book_record where owner=? and isbn=? and send_to = ? and status = ?';
+    db.open(process.env.DB)
+      .then(() => db.run(sql_string, owner, isbn, send_to, init_state))
+      .catch((err) => console.log('delete book_record err', err));
+
+    res.end();
+
+
+  })
+  .put('/api/bookTrade', (req, res) => {
+
+  })
+
+
+// api : bookRecord : delete a record (owner, guest, 5566, 'guest -> owner(book)')
+// app.delete
+
+// ownerid, guestid, 5566, guest <-book owner, bookIsComing, bookIsSending |
+// Event : Owner Click Ok, i'll send you. / Event : No, I need this book
+// api : bookRecord : update a record from (owner, guest, 5566, 'guest -> owner(book)') to (owner, guest, 5566, 'guest <-book')
+//                    update a record (owner, guest, 5566, 'decline')
+// app.update
+
+// ownerid, guestid, 5566, guest(book) - owner, bookIn, bookOut |
+// Event : guest : i received book
+// api : bookRecord : update a record from  (owner, guest, 5566, 'guest <-book') to (owner, guest, 5566, 'guest(book) - owner')
+// app.update
+
+// ownerid, guestid, 5566, guest book-> owner, bookGoingBack, bookComingingBack |
+// Event : owner want book/ guest want to return book.
+// api : bookRecord : update a record from  (owner, guest, 5566, 'guest(book) - owner') to (owner, guest, 5566, guest book-> owner)
+// app.update
+
+// ownerid, guestid, 5566, completed, completed, completed |
+// Event : owner: ok i get my book back.
+// api : bookRecord : update a record from  (owner, guest, 5566, 'guest(book) - owner') to (owner, guest, 5566, complete)
+// app.update
 
 app.post('/api/crawl/', (req, res) => {
   let {
