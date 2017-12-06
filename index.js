@@ -6,11 +6,20 @@ let cors = require('./cors');
 let passport = require('passport'),
   LocalStrategy = require('passport-local').Strategy,
   session = require('express-session'),
-  RedisStore = require('connect-redis')(session);
+  request = require('request'),
+  Redis = require('ioredis')
 
+require("dotenv").config();
+app.use(cors);
+
+let client = new Redis();
+
+app.use(bodyParser.json());
+app.use(bodyParser.urlencoded({
+  extended: true
+}));
 
 app.use(session({
-  store: new RedisStore(),
   secret: 'keyboard cat',
   resave: false,
   saveUninitialized: false
@@ -19,12 +28,34 @@ app.use(session({
 app.use(passport.initialize());
 app.use(passport.session());
 
-passport.use(new LocalStrategy({
+passport.serializeUser((user, done) => {
+  console.log('serializeUser', user)
+  let id = (Math.random() * Number.MAX_SAFE_INTEGER).toString(32);
+  client.set(id, user)
+    .then((result) => console.log('set ', user, ' to ', id))
+    .catch(err => console.log('err', err))
+  done(null, id);
+})
+
+passport.deserializeUser((id, done) => {
+  console.log('id', id)
+  client.get(id)
+    .then(user => {
+      console.log('deserial', user)
+      done(null, user)
+    })
+    .catch(err => {
+      console.log('err', err);
+      done(err)
+    })
+})
+
+passport.use('local', new LocalStrategy({
     usernameField: "username",
     passwordField: "password"
   },
   function(username, password, done) {
-    console.log(username, password)
+    console.log('un, pw', username, password)
 
     var options = {
       method: 'POST',
@@ -35,12 +66,12 @@ passport.use(new LocalStrategy({
       }
     };
     request(options, function(error, response, body) {
-      console.log('request login server')
+      // console.log('request login server')
       if (error) done(error);
       let logined = body.includes('<string xmlns="http://tempuri.org/">1</string>');
       if (logined) {
-        console.log('yeah login');
-        done(username);
+        console.log('yeah login', username);
+        done(null, username);
       } else {
         console.log('no who are you');
         done(null, false, {
@@ -53,20 +84,39 @@ passport.use(new LocalStrategy({
 
 
 
-require("dotenv").config();
 console.log('env:', process.env.NODE_ENV);
-app.use(cors);
-app.use(bodyParser.json());
-app.use(bodyParser.urlencoded({
-  extended: false
-}));
 
+
+
+
+app.post('/login', passport.authenticate('local', {
+    session: true
+  }),
+  (req, res) => {
+    if (req.isAuthenticated()) {
+      res.json({
+        status: 'OK',
+        username: req.user
+      });
+    } else {
+      res.json({
+        status: 'fail'
+      });
+    }
+  });
+
+
+app.get('/logout', (req, res) => {
+  console.log('in logout')
+  req.logout()
+  res.end();
+});
 
 
 
 function clean_books(books) {
   return books.map(item => {
-    // console.log(item);
+
     return {
       title: item.title,
       isbn: item.isbn,
@@ -94,8 +144,6 @@ app.post('/api/book/', (req, res) => {
 });
 
 
-
-
 app.delete('/api/book/', (req, res) => {
   let {
     empid,
@@ -112,12 +160,19 @@ app.delete('/api/book/', (req, res) => {
 });
 
 
-app.get('/api/bookOwner/:query', (req, res) => {
-  // isbn => [book_owners]
-  let sql_string = 'Select owner, send_to from book_own where isbn=?';
-  openDbThenQueryAll(req, res, sql_string)
+app.get('/api/bookOwner/:query',
+  (req, res) => {
+    // isbn => [book_owners]
+    if (req.isAuthenticated()) {
+      console.log('is auth')
+    } else {
+      console.log('not auth')
+    }
+    console.log('req.user', req.user);
+    let sql_string = 'Select owner, send_to from book_own where isbn=?';
+    openDbThenQueryAll(req, res, sql_string)
 
-})
+  })
 
 
 app.get('/api/mybookout/:query', (req, res) => {
@@ -138,7 +193,6 @@ app.get('/api/mybookin/:query', (req, res) => {
   db.open(process.env.DB)
     .then(() => db.all(sql_string, 15588))
     .then((books) => res.json(clean_books(books)))
-
     .catch(err => {
       console.log(err);
       res.end();
@@ -212,11 +266,7 @@ app.get('/api/bookrecord/:owner', (req, res) => {
 });
 
 
-app.post('/login', passport.authenticate('local'),
-  (req, res) => {
-    console.log('yay')
-    res.end();
-  });
+
 
 
 
